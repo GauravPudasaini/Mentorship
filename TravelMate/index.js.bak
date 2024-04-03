@@ -1,0 +1,76 @@
+import express from "express";
+import mongoose from "mongoose";
+import json from "body-parser";
+import passport from "passport";
+import { Strategy as FacebookStrategy } from "passport-facebook";
+import FacebookTokenStrategy from "passport-facebook-token";
+import session from "express-session";
+import fetch from 'node-fetch';
+
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const app = express();
+app.use(
+  session({
+    secret: process.env.secretkey,
+    resave: true,
+    saveUninitialized: true,
+  })
+);
+const port = 3000;
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(
+  new FacebookStrategy(
+    {
+      clientID: process.env.fbid,
+      clientSecret: process.env.fbsecret,
+      callbackURL: "http://localhost:3000/auth/facebook/callback",
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      const response = await fetch(`https://graph.facebook.com/v10.0/me?fields=id,name,email&access_token=${accessToken}`);
+      console.log(await response.json);
+      console.log(profile._json);
+      console.log(accessToken);
+    }
+  )
+);
+passport.serializeUser((user, done) => {
+  done(null, user);
+});
+
+passport.deserializeUser((user, done) => {
+  done(null, user);
+});
+
+app.get("/auth/facebook", passport.authenticate("facebook"));
+
+app.get(
+  "/auth/facebook/callback",
+  passport.authenticate("facebook", {
+    successRedirect: "/",
+    failureRedirect: "/login",
+  }),
+  async (req, res) => {
+    res.redirect("/");
+  }
+);
+
+app.get("/logout", (req, res) => {
+  req.logout();
+  res.redirect("/");
+});
+
+app.listen(port, async () => {
+  mongoose
+    .connect(process.env.mongourl)
+    .then(console.log("Connected to db"))
+    .catch((err) => {
+      console.error(err, "DB connection");
+    });
+  console.log(`Server listening on ${port}`);
+});
